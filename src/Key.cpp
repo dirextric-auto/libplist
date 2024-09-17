@@ -19,6 +19,7 @@
  */
 
 #include <cstdlib>
+#include "plist.h"
 #include <plist/Key.h>
 
 namespace PList
@@ -32,7 +33,7 @@ Key::Key(plist_t node, Node* parent) : Node(node, parent)
 {
 }
 
-Key::Key(const PList::Key& k) : Node(PLIST_UINT)
+Key::Key(const PList::Key& k) : Node(PLIST_INT)
 {
     plist_set_key_val(_node, k.GetValue().c_str());
 }

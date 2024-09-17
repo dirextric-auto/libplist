@@ -19,6 +19,7 @@
  */
 
 #include <cstdlib>
+#include "plist.h"
 #include <plist/Dictionary.h>
 
 namespace PList
@@ -99,7 +100,17 @@ Dictionary::iterator Dictionary::Begin()
     return _map.begin();
 }
 
+Dictionary::iterator Dictionary::begin()
+{
+    return _map.begin();
+}
+
 Dictionary::iterator Dictionary::End()
+{
+    return _map.end();
+}
+
+Dictionary::iterator Dictionary::end()
 {
     return _map.end();
 }
@@ -109,9 +120,23 @@ Dictionary::const_iterator Dictionary::Begin() const
     return _map.begin();
 }
 
+Dictionary::const_iterator Dictionary::begin() const
+{
+    return _map.begin();
+}
+
 Dictionary::const_iterator Dictionary::End() const
 {
     return _map.end();
+}
+
+Dictionary::const_iterator Dictionary::end() const
+{
+    return _map.end();
+}
+
+size_t Dictionary::size() const {
+    return _map.size();
 }
 
 Dictionary::iterator Dictionary::Find(const std::string& key)
@@ -141,11 +166,6 @@ Dictionary::iterator Dictionary::Set(const std::string& key, const Node* node)
 Dictionary::iterator Dictionary::Set(const std::string& key, const Node& node)
 {
     return Set(key, &node);
-}
-
-Dictionary::iterator Dictionary::Insert(const std::string& key, Node* node)
-{
-    return this->Set(key, node);
 }
 
 void Dictionary::Remove(Node* node)

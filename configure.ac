@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.68)
-AC_INIT([libplist], [2.2.1], [https://github.com/libimobiledevice/libplist/issues],, [https://libimobiledevice.org])
+AC_INIT([libplist], [m4_esyscmd(./git-version-gen $RELEASE_VERSION)], [https://github.com/libimobiledevice/libplist/issues], [], [https://libimobiledevice.org])
 AM_INIT_AUTOMAKE([dist-bzip2 no-dist-gzip check-news])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
 AC_CONFIG_SRCDIR([src/])
@@ -15,9 +15,14 @@ dnl libtool versioning
 #                 changes to the signature and the semantic)
 #  ? :+1 : ?   == just internal changes
 # CURRENT : REVISION : AGE
-LIBPLIST_SO_VERSION=6:0:3
+LIBPLIST_SO_VERSION=10:0:6
 
 AC_SUBST(LIBPLIST_SO_VERSION)
+
+# Check if we have a version defined
+if test -z $PACKAGE_VERSION; then
+  AC_MSG_ERROR([PACKAGE_VERSION is not defined. Make sure to configure a source tree checked out from git or that .tarball-version is present.])
+fi
 
 # Checks for programs.
 AC_PROG_CC
@@ -47,7 +52,7 @@ AC_TYPE_UINT32_T
 AC_TYPE_UINT8_T
 
 # Checks for library functions.
-AC_CHECK_FUNCS([asprintf strcasecmp strdup strerror strndup stpcpy vasprintf gmtime_r localtime_r timegm strptime memmem])
+AC_CHECK_FUNCS([strdup strndup strerror gmtime_r localtime_r timegm strptime memmem])
 
 # Checking endianness
 AC_C_BIGENDIAN([AC_DEFINE([__BIG_ENDIAN__], [1], [big endian])],
@@ -80,6 +85,15 @@ AC_CACHE_CHECK([wether the C compiler supports constructor/destructor attributes
   ac_cv_attribute_constructor=no
   AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
     [[
+      #ifndef __has_attribute
+        #define __has_attribute(x) 0
+      #endif
+      #if !__has_attribute(constructor)
+        #error No constructor attribute
+      #endif
+      #if !__has_attribute(destructor)
+        #error No destructor attribute
+      #endif
       static void __attribute__((constructor)) test_constructor(void) {
       }
       static void __attribute__((destructor)) test_destructor(void) {
@@ -115,7 +129,7 @@ AC_CACHE_CHECK(for tm_zone in struct tm, ac_cv_struct_tm_zone,
       #include <time.h>
     ], [
       struct tm tm;
-      tm.tm_zone = 1;
+      tm.tm_zone = (char*)"UTC";
     ])],
     [ac_cv_struct_tm_zone=yes],
     [ac_cv_struct_tm_zone=no]
@@ -133,9 +147,10 @@ AC_ARG_WITH([cython],
             [build_cython=false],
             [build_cython=true])
 if test "$build_cython" = "true"; then
-            AM_PATH_PYTHON(2.3)
-            AC_PROG_CYTHON(0.17.0)
-            CYTHON_PYTHON
+            AC_PROG_CYTHON([3.0.0])
+            if [test "x$CYTHON" != "xfalse"]; then
+              AM_PATH_PYTHON([3.0], [CYTHON_PYTHON])
+            fi
 else
             CYTHON=false
 fi
@@ -159,7 +174,7 @@ else
 fi
 AM_CONDITIONAL([HAVE_CYTHON],[test "x$cython_python_bindings" = "xyes"])
 
-AS_COMPILER_FLAGS(GLOBAL_CFLAGS, "-Wall -Wextra -Wredundant-decls -Wshadow -Wpointer-arith  -Wwrite-strings -Wswitch-default -Wno-unused-parameter -Wno-strict-aliasing -fvisibility=hidden $PTHREAD_CFLAGS")
+AS_COMPILER_FLAGS(GLOBAL_CFLAGS, "-Wall -Wextra -Wredundant-decls -Wshadow -Wpointer-arith  -Wwrite-strings -Wswitch-default -Wno-unused-parameter -Wno-strict-aliasing $PTHREAD_CFLAGS")
 GLOBAL_LDFLAGS="$PTHREAD_LIBS"
 
 AC_ARG_ENABLE(debug,
@@ -177,7 +192,17 @@ if (test "x$debug" = "xyes"); then
        GLOBAL_CFLAGS+=" -g"
 fi
 
+if test "x$enable_static" = "xyes" -a "x$enable_shared" = "xno"; then
+	GLOBAL_CFLAGS+=" -DLIBPLIST_STATIC"
+fi
+
+GLOBAL_CXXFLAGS=$GLOBAL_CFLAGS
+AS_COMPILER_FLAG([-fvisibility=hidden], [
+  GLOBAL_CFLAGS+=" -fvisibility=hidden"
+], [])
+
 AC_SUBST(GLOBAL_CFLAGS)
+AC_SUBST(GLOBAL_CXXFLAGS)
 AC_SUBST(GLOBAL_LDFLAGS)
 
 case "$GLOBAL_CFLAGS" in
@@ -196,6 +221,12 @@ AC_ARG_WITH([fuzzers],
             [build fuzzers (implies --with-sanitizers, default is no)])],
             [build_fuzzers=${withval}],
             [build_fuzzers=no])
+
+AC_ARG_WITH([tests],
+            [AS_HELP_STRING([--without-tests],
+            [Do not build libplist test suite (default is yes)])],
+            [build_tests=${withval}],
+            [build_tests=yes])
 
 if test "x$build_fuzzers" = "xyes"; then
     if test "x$build_sanitizers" = "xno"; then
@@ -267,9 +298,14 @@ if test "x$build_sanitizers" = "xyes"; then
 fi
 
 if test "x$build_fuzzers" = "xyes"; then
-    if test "$CXX" != "clang++"; then
+    IS_CLANG=`$CXX --version 2>/dev/null |grep clang`
+    case "$IS_CLANG" in
+        *clang*)
+        ;;
+        *)
         AC_MSG_WARN([building fuzzers requires clang/clang++ (continuing anyway)])
-    fi
+        ;;
+    esac
 
     CFLAGS+=" -DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION"
 
@@ -278,6 +314,7 @@ if test "x$build_fuzzers" = "xyes"; then
 fi
 
 AM_CONDITIONAL([BUILD_FUZZERS],[test "x$build_fuzzers" = "xyes"])
+AM_CONDITIONAL([BUILD_TESTS],[test "x$build_tests" != "xno"])
 
 if test "x$build_fuzzers" = "xyes" || test "x$build_sanitizers" = "xyes"; then
     AS_COMPILER_FLAGS(TEST_CFLAGS, [$CFLAGS])

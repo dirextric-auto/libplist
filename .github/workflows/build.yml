@@ -1,6 +1,9 @@
 name: build
 
-on: [push]
+on:
+  push:
+  schedule:
+    - cron: '0 0 1 * *'
 
 jobs:
   build-linux-ubuntu:
@@ -9,16 +12,18 @@ jobs:
     - name: install dependencies
       run: |
           sudo apt-get update
-          sudo apt-get install cython3
+          pip install cython
     - name: prepare environment
       run: |
           echo "target_triplet=`gcc -dumpmachine`" >> $GITHUB_ENV
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - name: autogen
       run: |
           export PYTHON=python3
           export LDFLAGS="-Wl,-rpath=/usr/local/lib"
-          ./autogen.sh
+          ./autogen.sh --enable-debug
     - name: make
       run: make
     - name: make check
@@ -31,7 +36,7 @@ jobs:
           DESTDIR=`pwd`/dest make install
           tar -C dest -cf libplist.tar usr
     - name: publish artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: libplist-latest_${{env.target_triplet}}
         path: libplist.tar
@@ -45,9 +50,11 @@ jobs:
           else
             brew install libtool autoconf automake
           fi
-          pip3 install cython
+          pip3 install --break-system-packages cython
       shell: bash
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - name: autogen
       run: |
           SDKDIR=`xcrun --sdk macosx --show-sdk-path`
@@ -69,12 +76,8 @@ jobs:
             PYTHON_FRAMEWORK_PATH=$PYTHON_EXEC_PREFIX/Python3
             export PYTHON_LIBS="-L$PYTHON_LIBS_PATH -lpython$PYTHON_VER"
             export PYTHON_EXTRA_LDFLAGS="-Wl,-stack_size,1000000  -framework CoreFoundation $PYTHON_FRAMEWORK_PATH"
-          else
-            export PATH="$PATH:/Library/Frameworks/Python.framework/Versions/2.7/bin"
-            export LIBS="-L/Library/Frameworks/Python.framework/Versions/2.7/lib"
-            export PYTHON_EXTRA_LDFLAGS="-u _PyMac_Error /System/Library/Frameworks/Python.framework/Versions/2.7/Python"
           fi
-          ./autogen.sh
+          ./autogen.sh --enable-debug
     - name: make
       run: make
     - name: make check
@@ -87,12 +90,12 @@ jobs:
           DESTDIR=`pwd`/dest make install
           tar -C dest -cf libplist.tar usr
     - name: publish artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: libplist-latest_macOS
         path: libplist.tar
   build-windows:
-    runs-on: windows-latest
+    runs-on: windows-2019
     defaults:
       run:
         shell: msys2 {0}
@@ -123,9 +126,12 @@ jobs:
           dest=`echo ${{ matrix.msystem }} |tr [:upper:] [:lower:]`
           echo "dest=$dest" >> $GITHUB_ENV
           echo "target_triplet=`gcc -dumpmachine`" >> $GITHUB_ENV
-    - uses: actions/checkout@v2
+          git config --global core.autocrlf false
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - name: autogen
-      run: ./autogen.sh CC=gcc CXX=g++
+      run: ./autogen.sh CC=gcc CXX=g++ --enable-debug
     - name: make
       run: make
     - name: make check
@@ -150,7 +156,7 @@ jobs:
           DESTDIR=`pwd`/dest make install
           tar -C dest -cf libplist.tar ${{ env.dest }}
     - name: publish artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: libplist-latest_${{ matrix.arch }}-${{ env.dest }}
         path: libplist.tar
